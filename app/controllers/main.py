@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 # AJUSTE DE IMPORTAÇÃO: Apontando para os arquivos corretos da sua estrutura base
 from app.models.database import SessionLocal, Livro, Usuario
+from app.controllers.auth import criar_token, verificar_senha, hash_senha
 from auth import hash_senha, verificar_senha, criar_token
 from pydantic import BaseModel
 from typing import Optional
