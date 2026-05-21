@@ -1,82 +1,60 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-# AJUSTE DE IMPORTAÇÃO: Apontando para os arquivos corretos da sua estrutura base
 from app.models.database import SessionLocal, Livro, Usuario
 from app.controllers.auth import criar_token, verificar_senha, hash_senha
-from auth import hash_senha, verificar_senha, criar_token
-from pydantic import BaseModel
-from typing import Optional
 
 router = APIRouter()
 
-# --- SCHEMAS (Modelos de Entrada) ---
-class UserSchema(BaseModel):
-    username: str
-    password: str
-
-class LivroSchema(BaseModel):
-    titulo: str
-    autor: str
-    foto_url: Optional[str] = None # <<< MANTIDO: Campo opcional para a foto
-
-# Dependência para o Banco de Dados
 def get_db():
     db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    try: yield db
+    finally: db.close()
 
-# --- ROTAS DE AUTENTICAÇÃO ---
-
-@router.post("/auth/register", status_code=201)
-def register(user: UserSchema, db: Session = Depends(get_db)):
-    # <<< MANTIDO: Lógica de cadastro
-    db_user = db.query(Usuario).filter(Usuario.username == user.username).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Usuário já existe")
-    
-    novo_usuario = Usuario(
-        username=user.username,
-        password_hash=hash_senha(user.password)
-    )
-    db.add(novo_usuario)
+# AUTH ROUTES
+@router.post("/auth/register")
+def register(dados: dict, db: Session = Depends(get_db)):
+    novo_user = Usuario(username=dados['username'], password_hash=hash_senha(dados['password']))
+    db.add(novo_user)
     db.commit()
-    return {"message": "Usuário criado com sucesso"}
+    return {"status": "sucesso"}
 
 @router.post("/auth/login")
-def login(user: UserSchema, db: Session = Depends(get_db)):
-    db_user = db.query(Usuario).filter(Usuario.username == user.username).first()
-    if not db_user or not verificar_senha(user.password, db_user.password_hash):
+def login(dados: dict, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(Usuario.username == dados['username']).first()
+    if not user or not verificar_senha(dados['password'], user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
-    
-    token = criar_token({"sub": db_user.username})
-    return {"token": token}
+    return {"token": criar_token({"sub": user.username})}
 
-# --- ROTAS DE LIVROS ---
-
+# CRUD LIVROS
 @router.get("/livros")
 def listar_livros(db: Session = Depends(get_db)):
     return db.query(Livro).all()
 
 @router.post("/livros")
-def criar_livro(livro: LivroSchema, db: Session = Depends(get_db)):
-    # <<< MANTIDO: Salva também a foto_url
-    novo_livro = Livro(
-        titulo=livro.titulo, 
-        autor=livro.autor,
-        foto_url=livro.foto_url
+def criar_livro(livro: dict, db: Session = Depends(get_db)):
+    # <<< ACRÉSCIMO CIRÚRGICO: Adicionado o campo foto_url vindo do dicionário se ele existir
+    novo = Livro(
+        titulo=livro['titulo'], 
+        autor=livro['autor'],
+        foto_url=livro.get('foto_url')  # Pega a foto se enviada, senão fica None
     )
-    db.add(novo_livro)
+    db.add(novo)
     db.commit()
-    db.refresh(novo_livro)
-    return novo_livro
+    return {"status": "criado"}
 
-@router.delete("/livros/{livro_id}")
-def excluir_livro(livro_id: int, db: Session = Depends(get_db)):
-    db_livro = db.query(Livro).filter(Livro.id == livro_id).first()
-    if not db_livro:
-        raise HTTPException(status_code=404, detail="Livro não encontrado")
-    db.delete(db_livro)
+@router.put("/livros/{id}")
+def editar_livro(id: int, dados: dict, db: Session = Depends(get_db)):
+    livro = db.query(Livro).filter(Livro.id == id).first()
+    if not livro: raise HTTPException(status_code=404)
+    livro.titulo = dados['titulo']
+    livro.autor = dados['autor']
     db.commit()
-    return {"message": "Excluído"}
+    return {"status": "atualizado"}
+
+@router.delete("/livros/{id}")
+def excluir_livro(id: int, db: Session = Depends(get_db)):
+    livro = db.query(Livro).filter(Livro.id == id).first()
+    if not livro: raise HTTPException(status_code=404)
+    db.delete(livro)
+    db.commit()
+    return {"status": "removido"}

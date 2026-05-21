@@ -16,12 +16,15 @@ with st.sidebar:
         u = st.text_input("Usuário")
         p = st.text_input("Senha", type="password")
         col_btn1, col_btn2 = st.columns(2)
-        if st.button("Entrar"):
+        
+        # 🟢 AJUSTE CIRÚRGICO: Associado corretamente à col_btn1
+        if col_btn1.button("Entrar"):
             res = requests.post(f"{API_URL}/auth/login", json={"username": u, "password": p})
             if res.status_code == 200:
                 st.session_state.token = res.json()["token"]
                 st.rerun()
             else: st.error("Erro ao logar")
+            
         if col_btn2.button("Cadastrar"):
             res = requests.post(f"{API_URL}/auth/register", json={"username": u, "password": p})
             if res.status_code == 201 or res.status_code == 200:
