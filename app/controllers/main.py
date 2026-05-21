@@ -28,15 +28,25 @@ def login(dados: dict, db: Session = Depends(get_db)):
 # CRUD LIVROS
 @router.get("/livros")
 def listar_livros(db: Session = Depends(get_db)):
-    return db.query(Livro).all()
+    # <<< AJUSTE SEGURO: Mapeia os dados explicitamente para evitar erros de serialização no Render
+    livros_db = db.query(Livro).all()
+    resultado = []
+    for l in livros_db:
+        resultado.append({
+            "id": l.id,
+            "titulo": l.titulo,
+            "autor": l.autor,
+            "foto_url": getattr(l, 'foto_url', None) or ""  # Se for nulo ou não existir, devolve texto vazio
+        })
+    return resultado
 
 @router.post("/livros")
 def criar_livro(livro: dict, db: Session = Depends(get_db)):
-    # <<< ACRÉSCIMO CIRÚRGICO: Adicionado o campo foto_url vindo do dicionário se ele existir
+    # <<< AJUSTE CIRÚRGICO: Cria garantindo que a foto_url vá limpa se não for enviada
     novo = Livro(
         titulo=livro['titulo'], 
         autor=livro['autor'],
-        foto_url=livro.get('foto_url')  # Pega a foto se enviada, senão fica None
+        foto_url=livro.get('foto_url', '')  # Evita salvar como nulo puro que quebra consultas antigas
     )
     db.add(novo)
     db.commit()
@@ -48,6 +58,8 @@ def editar_livro(id: int, dados: dict, db: Session = Depends(get_db)):
     if not livro: raise HTTPException(status_code=404)
     livro.titulo = dados['titulo']
     livro.autor = dados['autor']
+    if 'foto_url' in dados:
+        livro.foto_url = dados['foto_url']
     db.commit()
     return {"status": "atualizado"}
 
